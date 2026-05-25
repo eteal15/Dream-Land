@@ -1,0 +1,11 @@
+{
+  "users": {},
+  "dreams": [],
+  "payments": [],
+  "admins": [
+    {
+      "username": "admin",
+      "token": "admin-token-12345"
+    }
+  ]
+}

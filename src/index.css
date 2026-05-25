@@ -1,0 +1,73 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Noto+Sans+Ethiopic:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Noto Sans Ethiopic", "Inter", sans-serif;
+  --font-display: "Space Grotesk", "Noto Sans Ethiopic", sans-serif;
+  
+  --color-gold-50: #fefbeb;
+  --color-gold-100: #fef3c7;
+  --color-gold-200: #fde68a;
+  --color-gold-300: #fcd34d;
+  --color-gold-400: #fbbf24;
+  --color-gold-500: #f59e0b;
+  --color-gold-600: #d97706;
+  --color-gold-700: #b45309;
+  --color-gold-800: #92400e;
+  --color-gold-900: #78350f;
+  
+  --color-cosmic-bg: #03030b;
+  --color-cosmic-card: #09091b;
+  --color-cosmic-border: #161633;
+  --color-cosmic-header: #0e0e29;
+}
+
+/* Custom glow animation for the spiritual aura effect */
+@keyframes pulseGlow {
+  0%, 100% {
+    opacity: 0.35;
+    transform: scale(1);
+    filter: blur(80px);
+  }
+  50% {
+    opacity: 0.55;
+    transform: scale(1.15);
+    filter: blur(100px);
+  }
+}
+
+.aurora-gold {
+  position: absolute;
+  width: 300px;
+  height: 300px;
+  background: radial-gradient(circle, rgba(245, 158, 11, 0.2) 0%, rgba(245, 158, 11, 0) 70%);
+  border-radius: 50%;
+  animation: pulseGlow 8s infinite ease-in-out;
+  pointer-events: none;
+}
+
+.aurora-purple {
+  position: absolute;
+  width: 350px;
+  height: 350px;
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.15) 0%, rgba(139, 92, 246, 0) 70%);
+  border-radius: 50%;
+  animation: pulseGlow 12s infinite ease-in-out;
+  pointer-events: none;
+}
+
+/* Custom beautiful scrollbar for dream history */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #03030b;
+}
+::-webkit-scrollbar-thumb {
+  background: #161633;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #fbbf24;
+}

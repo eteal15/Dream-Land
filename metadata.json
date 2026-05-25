@@ -1,0 +1,8 @@
+{
+  "name": "Remix: Hilm: Amharic AI Dream Interpreter",
+  "description": "Discover the meaning of your dreams with AI-powered spiritual and psychological interpretations tailored for Ethiopian users in Amharic.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
