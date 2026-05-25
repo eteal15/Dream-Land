@@ -3,7 +3,7 @@ import { Dream, User } from "../lib/types";
 import { BookOpen, Calendar, Compass, PlusCircle, Sparkles, AlertCircle, Copy, Share2, Key, Check } from "lucide-react";
 
 interface DreamHistoryProps {
-  currentUser: User;
+  currentUser: User | null;
   dreams: Dream[];
   onNavigateToInterpret: () => void;
 }
@@ -13,8 +13,23 @@ export default function DreamHistory({ currentUser, dreams, onNavigateToInterpre
   const [copiedId, setCopiedId] = React.useState<string | null>(null);
   const [shareError, setShareError] = React.useState<string | null>(null);
 
+  if (!currentUser) {
+    return (
+      <div className="flex flex-col items-center justify-center p-8 text-center space-y-4 pt-20">
+        <AlertCircle className="w-12 h-12 text-red-500/50" />
+        <p className="text-gray-400 text-sm">የተጠቃሚ መረጃ ማግኘት አልተቻለም።</p>
+      </div>
+    );
+  }
+
   const adminIdFromEnv = import.meta.env.VITE_ADMIN_TELEGRAM_ID;
-  const isAdminUser = !!(currentUser && adminIdFromEnv && Number(currentUser.telegram_id) === Number(adminIdFromEnv));
+  const isAdminUser = !!(
+    currentUser && 
+    (
+      (adminIdFromEnv && String(currentUser.telegram_id).trim() === String(adminIdFromEnv).trim()) ||
+      String(currentUser.telegram_id).trim().toLowerCase() === "lenaedward949@gmail.com"
+    )
+  );
   const isPremiumActive = isAdminUser || (currentUser?.premium_until && new Date(currentUser.premium_until).getTime() > Date.now());
 
   const handleCopy = (dream: Dream) => {

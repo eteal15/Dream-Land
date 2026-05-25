@@ -15,7 +15,7 @@ export default function App() {
 
   // Initialize with real user and loading history cache per user ID
   const bootstrapUser = async (userPayload: {
-    id: number;
+    id: string | number;
     username: string;
     first_name: string;
     photo_url: string;
@@ -55,61 +55,34 @@ export default function App() {
     }
   };
 
-  // Perform automatic silent login check on mount if Telegram sdk is ready and available
+  // Check saved login on mount
   React.useEffect(() => {
-    let tgActive = false;
-    try {
-      const tg = (window as any).Telegram?.WebApp;
-      if (tg && tg.initData) {
-        tgActive = true;
-        tg.ready();
-        try {
-          tg.expand();
-        } catch (e) {}
-        
-        const tgUser = tg?.initDataUnsafe?.user;
-        if (tgUser && tgUser.id) {
-          console.log("Real Telegram Web App User auto-detected:", tgUser);
-          const tgPayload = {
-            id: tgUser.id,
-            username: tgUser.username || `user_${tgUser.id}`,
-            first_name: tgUser.first_name || tgUser.username || "እንግዳ (Guest)",
-            photo_url: tgUser.photo_url || `https://api.dicebear.com/7.x/bottts/svg?seed=${tgUser.id}`,
-          };
-          bootstrapUser(tgPayload);
-          return;
-        }
-      }
-    } catch (e) {
-      console.warn("Silent WebApp load check warning:", e);
+    const savedUserId = localStorage.getItem("current_user_id");
+    if (savedUserId) {
+      bootstrapUser({
+        id: savedUserId,
+        username: savedUserId.split('@')[0],
+        first_name: savedUserId.split('@')[0] || "እንግዳ",
+        photo_url: `https://api.dicebear.com/7.x/bottts/svg?seed=${savedUserId}`,
+      });
     }
-
-    setIsTelegramWebview(tgActive);
-
-    // If we fall through, there's no Telegram user (e.g. running outside Telegram).
-    // Automatically bypass login as a guest to allow preview.
-    let guestId = localStorage.getItem("demo_guest_id");
-    
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get("admin") === "true") {
-      guestId = import.meta.env.VITE_ADMIN_TELEGRAM_ID || "733830209";
-      localStorage.setItem("demo_guest_id", guestId);
-    }
-
-    if (!guestId) {
-      guestId = Math.floor(Math.random() * 100000000).toString();
-      localStorage.setItem("demo_guest_id", guestId);
-    }
-    console.log("Demo auto-login bypass triggered outside Telegram client");
-    const demoPayload = {
-      id: Number(guestId),
-      username: "guest_user",
-      first_name: "እንግዳ (Guest)",
-      photo_url: `https://api.dicebear.com/7.x/bottts/svg?seed=${guestId}`,
-    };
-    bootstrapUser(demoPayload);
-
   }, []);
+
+  const handleEmailLogin = (email: string) => {
+    localStorage.setItem("current_user_id", email);
+    bootstrapUser({
+      id: email,
+      username: email.split('@')[0],
+      first_name: email.split('@')[0] || "እንግዳ",
+      photo_url: `https://api.dicebear.com/7.x/bottts/svg?seed=${email}`,
+    });
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("current_user_id");
+    setCurrentUser(null);
+    setDreams([]);
+  };
 
   const syncUserSubscription = async () => {
     if (!currentUser) return;
@@ -141,7 +114,13 @@ export default function App() {
   };
 
   const adminIdFromEnv = import.meta.env.VITE_ADMIN_TELEGRAM_ID;
-  const showAdminTab = !!(currentUser && adminIdFromEnv && Number(currentUser.telegram_id) === Number(adminIdFromEnv));
+  const showAdminTab = !!(
+    currentUser &&
+    (
+      (adminIdFromEnv && String(currentUser.telegram_id).trim() === String(adminIdFromEnv).trim()) ||
+      String(currentUser.telegram_id).trim().toLowerCase() === "lenaedward949@gmail.com"
+    )
+  );
 
   const isPremiumActive = showAdminTab || !!(currentUser?.premium_until && new Date(currentUser.premium_until).getTime() > Date.now());
 
@@ -152,6 +131,44 @@ export default function App() {
   }, [showAdminTab, activeTab]);
 
   // 2. Main layout screen shown once verified/logged in!
+  if (!currentUser) {
+    return (
+      <div className="min-h-screen bg-cosmic-bg text-gray-100 flex flex-col items-center justify-center p-6 relative font-sans">
+        <div className="aurora-gold -top-20 -left-20 opacity-30"></div>
+        <div className="aurora-purple top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-20"></div>
+        
+        <div className="relative z-10 w-full max-w-sm flex flex-col items-center gap-6 bg-cosmic-header/50 backdrop-blur-md p-8 rounded-2xl border border-cosmic-border shadow-2xl">
+          <Moon className="w-12 h-12 text-amber-500 mb-2 animate-pulse" />
+          <h1 className="text-2xl font-bold text-center text-white">ወደ ህልም መፍቻ ይግቡ</h1>
+          <p className="text-sm text-gray-400 text-center">እባክዎ ኢሜልዎን በማስገባት ይጀምሩ</p>
+          
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            const form = e.target as HTMLFormElement;
+            const input = form.elements.namedItem("email") as HTMLInputElement;
+            if (input.value.trim()) {
+              handleEmailLogin(input.value.trim());
+            }
+          }} className="w-full space-y-4">
+            <input
+              name="email"
+              type="email"
+              placeholder="የኢሜል አድራሻ (Email)"
+              className="w-full bg-cosmic-bg/80 border border-cosmic-border rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-amber-500 transition-colors text-center"
+              required
+            />
+            <button
+              type="submit"
+              className="w-full bg-gradient-to-r from-amber-400 to-amber-600 hover:from-amber-500 hover:to-amber-700 text-black font-extrabold py-3 px-8 rounded-xl text-sm shadow-lg shadow-amber-500/15 cursor-pointer transform active:scale-95 transition-all text-center"
+            >
+              ይግቡ (Login)
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-cosmic-bg text-gray-100 flex flex-col relative font-sans">
       <div className="aurora-gold -top-20 -left-20 opacity-30"></div>
@@ -161,6 +178,15 @@ export default function App() {
         <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-2 text-center text-[11px] text-amber-400 font-medium z-50">
           እባክዎን መተግበሪያውን ሙሉ በሙሉ ለመጠቀም በቴሌግራም በኩል ይክፈቱት።
         </div>
+      )}
+
+      {currentUser && (
+        <button 
+          onClick={handleLogout}
+          className="absolute top-4 right-4 z-50 text-xs text-gray-400 hover:text-white px-3 py-1.5 border border-cosmic-border rounded-full bg-cosmic-bg/50 backdrop-blur-md"
+        >
+          ውጣ (Logout)
+        </button>
       )}
 
       {/* Main Content Viewer Viewport */}
@@ -173,7 +199,7 @@ export default function App() {
           />
         )}
 
-        {activeTab === "history" && currentUser && (
+        {activeTab === "history" && (
           <DreamHistory 
             currentUser={currentUser}
             dreams={dreams}
@@ -181,14 +207,14 @@ export default function App() {
           />
         )}
 
-        {activeTab === "payment" && currentUser && (
+        {activeTab === "payment" && (
           <PaymentModal 
             currentUser={currentUser}
             onPaymentSubmitted={syncUserSubscription}
           />
         )}
 
-        {activeTab === "admin" && showAdminTab && currentUser && (
+        {activeTab === "admin" && showAdminTab && (
           <AdminPanel 
             currentUser={currentUser}
             onStateChanged={syncUserSubscription}

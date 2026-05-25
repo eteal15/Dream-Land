@@ -1,7 +1,7 @@
 import { User, Dream, Payment, Analytics } from "./types";
 
 export async function authTelegram(payload: {
-  id: number;
+  id: string | number;
   username?: string;
   first_name?: string;
   photo_url?: string;

@@ -205,7 +205,13 @@ ${latestDream.interpretation.summary}`;
   };
 
   const adminIdFromEnv = import.meta.env.VITE_ADMIN_TELEGRAM_ID;
-  const isAdminUser = !!(currentUser && adminIdFromEnv && Number(currentUser.telegram_id) === Number(adminIdFromEnv));
+  const isAdminUser = !!(
+    currentUser && 
+    (
+      (adminIdFromEnv && String(currentUser.telegram_id).trim() === String(adminIdFromEnv).trim()) ||
+      String(currentUser.telegram_id).trim().toLowerCase() === "lenaedward949@gmail.com"
+    )
+  );
   const isPremiumActive = isAdminUser || (currentUser?.premium_until && new Date(currentUser.premium_until).getTime() > Date.now());
   const hasRemainingCredits = currentUser ? (currentUser.dream_credits > 0 || (!currentUser.free_trial_used && !isLocalTrialUsed)) : true;
   const isBlocked = currentUser && !isPremiumActive && !hasRemainingCredits;
