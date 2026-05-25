@@ -12,7 +12,7 @@ export default function App() {
   const [dreams, setDreams] = React.useState<Dream[]>([]);
   const [activeTab, setActiveTab] = React.useState<"interpret" | "history" | "payment" | "admin">("interpret");
   const [loadingUser, setLoadingUser] = React.useState(false);
-  const [isOutsideTelegram, setIsOutsideTelegram] = React.useState(false);
+  const [loginWarning, setLoginWarning] = React.useState<string | null>(null);
 
   // Initialize with real user and loading history cache per user ID
   const bootstrapUser = async (userPayload: {
@@ -62,58 +62,59 @@ export default function App() {
     }
   };
 
+  // Perform automatic silent login check on mount if Telegram sdk is ready and available
   React.useEffect(() => {
-    let attempts = 0;
-    const maxAttempts = 15; // Wait up to 1.5 seconds for Telegram WebApp SDK loading
-
-    const checkAndInitTelegram = () => {
+    try {
       const tg = (window as any).Telegram?.WebApp;
-      
       if (tg) {
         tg.ready();
-        try {
-          tg.expand();
-        } catch (e) {
-          console.warn("Could not expand telegram frame:", e);
+        tg.expand();
+        
+        const tgUser = tg?.initDataUnsafe?.user;
+        if (tgUser && tgUser.id) {
+          console.log("Real Telegram Web App User auto-detected on mount:", tgUser);
+          const tgPayload = {
+            id: tgUser.id,
+            username: tgUser.username || `user_${tgUser.id}`,
+            first_name: tgUser.first_name || tgUser.username || "እንግዳ (Guest)",
+            photo_url: tgUser.photo_url || `https://api.dicebear.com/7.x/bottts/svg?seed=${tgUser.id}`,
+          };
+          bootstrapUser(tgPayload);
         }
       }
+    } catch (e) {
+      console.warn("Silent WebApp load check warning:", e);
+    }
+  }, []);
 
-      const tgUser = tg?.initDataUnsafe?.user;
-      if (tgUser && tgUser.id) {
-        console.log("Real Telegram Web App User found:", tgUser);
-        const tgPayload = {
-          id: tgUser.id,
-          username: tgUser.username || `user_${tgUser.id}`,
-          first_name: tgUser.first_name || tgUser.username || "እንግዳ (Guest)",
-          photo_url: tgUser.photo_url || `https://api.dicebear.com/7.x/bottts/svg?seed=${tgUser.id}`,
-        };
-        bootstrapUser(tgPayload);
-        return true;
+  const handleTelegramLogin = () => {
+    setLoginWarning(null);
+    const tg = (window as any).Telegram?.WebApp;
+    
+    if (tg) {
+      try {
+        tg.ready();
+        tg.expand();
+      } catch (e) {
+        console.warn("Could not expand Telegram frame:", e);
       }
-      return false;
-    };
-
-    // 1. Initial immediate check
-    if (checkAndInitTelegram()) {
-      return;
     }
 
-    // 2. Poll the Telegram SDK status with short interval
-    const timer = setInterval(() => {
-      attempts++;
-      const success = checkAndInitTelegram();
-      if (success || attempts >= maxAttempts) {
-        clearInterval(timer);
-        
-        // 3. Display strict environment hard block when running outside Telegram WebApp container
-        if (!success) {
-          setIsOutsideTelegram(true);
-        }
-      }
-    }, 100);
-
-    return () => clearInterval(timer);
-  }, []);
+    const tgUser = tg?.initDataUnsafe?.user;
+    if (tgUser && tgUser.id) {
+      console.log("Real Telegram Web App User found on button click:", tgUser);
+      const tgPayload = {
+        id: tgUser.id,
+        username: tgUser.username || `user_${tgUser.id}`,
+        first_name: tgUser.first_name || tgUser.username || "እንግዳ (Guest)",
+        photo_url: tgUser.photo_url || `https://api.dicebear.com/7.x/bottts/svg?seed=${tgUser.id}`,
+      };
+      bootstrapUser(tgPayload);
+    } else {
+      console.warn("User data not found in Telegram WebApp context.");
+      setLoginWarning("እባክዎን ይህንን አፕሊኬሽን በቴሌግራም ውስጥ ይክፈቱ!");
+    }
+  };
 
   const syncUserSubscription = async () => {
     if (!currentUser) return;
@@ -155,73 +156,111 @@ export default function App() {
     }
   }, [showAdminTab, activeTab]);
 
-  if (isOutsideTelegram) {
+  // If loading user backend data
+  if (loadingUser) {
     return (
-      <div className="min-h-screen bg-cosmic-bg text-gray-100 flex flex-col items-center justify-center p-6 relative font-sans text-center">
+      <div className="min-h-screen bg-cosmic-bg text-gray-100 flex flex-col items-center justify-center space-y-4 font-sans text-center relative">
         <div className="aurora-gold -top-20 -left-20 opacity-30"></div>
         <div className="aurora-purple top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-20"></div>
-        <div className="max-w-md w-full bg-cosmic-card/85 backdrop-blur-md border border-cosmic-border p-8 rounded-2xl shadow-xl space-y-6 animate-fadeIn relative z-10 font-sans">
-          <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/20 text-amber-500 rounded-full flex items-center justify-center mx-auto animate-pulse">
-            <Moon className="w-8 h-8 font-sans" />
-          </div>
-          <div className="space-y-3 font-sans">
-            <h2 className="text-xl font-bold text-gray-100 italic">የህልም መፍቻ (Dream Interpreter)</h2>
-            <p className="text-sm text-amber-400 font-extrabold leading-relaxed">
-              እባክዎን ይህንን አፕሊኬሽን በቴሌግራም ውስጥ ይክፈቱ!
-            </p>
-            <p className="text-xs text-gray-400 leading-relaxed pt-2">
-              Please open this application inside your official Telegram client to start using the dream interpreter.
-            </p>
-          </div>
+        <div className="relative z-10 flex flex-col items-center gap-3">
+          <Compass className="w-12 h-12 text-amber-500 animate-spin" />
+          <p className="text-xs text-gray-400 font-sans">አካውንት መረጃዎችን እያመሳሰልን ነው...</p>
         </div>
       </div>
     );
   }
 
+  // 1. If not logged in & no current user loaded, render the "Login with Telegram" Welcome layout!
+  if (!currentUser) {
+    return (
+      <div className="min-h-screen bg-cosmic-bg text-gray-100 flex flex-col justify-between p-6 relative overflow-hidden font-sans">
+        <div className="aurora-gold -top-20 -left-20 opacity-30 animate-pulse"></div>
+        <div className="aurora-purple top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-20"></div>
+
+        <div className="flex-1 flex flex-col justify-center items-center max-w-md w-full mx-auto space-y-8 z-10 animate-fadeIn text-center py-10">
+          <div className="inline-flex p-5 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20 shadow-xl shadow-amber-500/5 animate-pulse">
+            <Moon className="w-12 h-12" />
+          </div>
+
+          <div className="space-y-3 font-sans">
+            <h1 className="text-4xl font-extrabold tracking-tight text-white font-display bg-clip-text text-transparent bg-gradient-to-r from-amber-400 via-yellow-200 to-white">
+              Helm / ህልም
+            </h1>
+            <p className="text-xs text-amber-500 font-bold uppercase tracking-wider">
+              የህልም መፍቻ (AI Dream Interpreter)
+            </p>
+            <p className="text-xs text-gray-300 leading-relaxed max-w-sm mx-auto">
+              የታየውን ህልም በአማርኛ በመጻፍ መንፈሳዊ፣ ስነ-ልቦናዊ እና ምልክታዊ የሆኑ ጥልቅ ትርጓሜዎችን በጥበብ ከተሞላው የዮሴፍ አርቲፊሻል ኢንተለጀንስ ያግኙ።
+            </p>
+          </div>
+
+          <div className="w-full space-y-4">
+            <button
+              id="login-telegram-btn"
+              onClick={handleTelegramLogin}
+              className="w-full bg-gradient-to-r from-amber-400 to-amber-600 hover:from-amber-500 hover:to-amber-700 text-black font-extrabold py-4 px-8 rounded-2xl text-xs tracking-wider uppercase shadow-lg shadow-amber-500/15 cursor-pointer transform active:scale-95 transition-all text-center flex items-center justify-center gap-2"
+            >
+              <Moon className="w-4 h-4 fill-black text-black" />
+              በቴሌግራም ይግቡ (Login with Telegram)
+            </button>
+
+            {loginWarning && (
+              <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-xl text-center select-none animate-fadeIn max-w-sm mx-auto">
+                <p className="text-xs text-amber-400 font-bold leading-relaxed">
+                  ⚠️ {loginWarning}
+                </p>
+                <div className="text-[10px] text-gray-400 mt-1 leading-relaxed">
+                  Please open this application inside your official Telegram client to proceed.
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Footer copyright */}
+        <div className="text-[10px] text-gray-500 z-10 text-center font-mono">
+          © {new Date().getFullYear()} XML Labs. Tailored Spiritual Guidance for Ethiopian Users inside Telegram.
+        </div>
+      </div>
+    );
+  }
+
+  // 2. Main layout screen shown once verified/logged in!
   return (
     <div className="min-h-screen bg-cosmic-bg text-gray-100 flex flex-col relative font-sans">
       <div className="aurora-gold -top-20 -left-20 opacity-30"></div>
       <div className="aurora-purple top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-20"></div>
 
       {/* Main Content Viewer Viewport */}
-      <main className="flex-1 overflow-y-auto pb-24 relative z-10 w-full">
-        {loadingUser ? (
-          <div className="h-[50vh] flex flex-col items-center justify-center space-y-3">
-            <Compass className="w-10 h-10 text-amber-500 animate-spin" />
-            <p className="text-xs text-gray-400 font-sans">አካውንት መረጃዎችን እያመሳሰልን ነው...</p>
-          </div>
-        ) : (
-          <>
-            {activeTab === "interpret" && (
-              <DreamInterpreter 
-                currentUser={currentUser}
-                onDreamInterpreted={handleDreamInterpreted}
-                onNavigateToPayment={() => setActiveTab("payment")}
-              />
-            )}
+      <main className="flex-1 overflow-y-auto pb-24 relative z-10 w-full mt-2">
+        {activeTab === "interpret" && (
+          <DreamInterpreter 
+            currentUser={currentUser}
+            onDreamInterpreted={handleDreamInterpreted}
+            onNavigateToPayment={() => setActiveTab("payment")}
+          />
+        )}
 
-            {activeTab === "history" && (
-              <DreamHistory 
-                currentUser={currentUser!}
-                dreams={dreams}
-                onNavigateToInterpret={() => setActiveTab("interpret")}
-              />
-            )}
+        {activeTab === "history" && (
+          <DreamHistory 
+            currentUser={currentUser!}
+            dreams={dreams}
+            onNavigateToInterpret={() => setActiveTab("interpret")}
+          />
+        )}
 
-            {activeTab === "payment" && (
-              <PaymentModal 
-                currentUser={currentUser}
-                onPaymentSubmitted={syncUserSubscription}
-              />
-            )}
+        {activeTab === "payment" && (
+          <PaymentModal 
+            currentUser={currentUser}
+            onPaymentSubmitted={syncUserSubscription}
+          />
+        )}
 
-            {activeTab === "admin" && showAdminTab && (
-              <AdminPanel 
-                currentUser={currentUser}
-                onStateChanged={syncUserSubscription}
-              />
-            )}
-          </>
+        {activeTab === "admin" && showAdminTab && (
+          <AdminPanel 
+            currentUser={currentUser}
+            onStateChanged={syncUserSubscription}
+          />
         )}
       </main>
 
