@@ -12,7 +12,6 @@ export default function App() {
   const [dreams, setDreams] = React.useState<Dream[]>([]);
   const [activeTab, setActiveTab] = React.useState<"interpret" | "history" | "payment" | "admin">("interpret");
   const [loadingUser, setLoadingUser] = React.useState(false);
-  const [loginWarning, setLoginWarning] = React.useState<string | null>(null);
 
   // Initialize with real user and loading history cache per user ID
   const bootstrapUser = async (userPayload: {
@@ -80,54 +79,36 @@ export default function App() {
             photo_url: tgUser.photo_url || `https://api.dicebear.com/7.x/bottts/svg?seed=${tgUser.id}`,
           };
           bootstrapUser(tgPayload);
+          return;
         }
       }
+
+      // If we fall through, there's no Telegram user (e.g. running outside Telegram).
+      // Automatically bypass login as a guest to allow preview, but DO NOT grant admin access to everyone.
+      let guestId = localStorage.getItem("demo_guest_id");
+      
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get("admin") === "true") {
+        guestId = import.meta.env.VITE_ADMIN_TELEGRAM_ID || "733830209";
+        localStorage.setItem("demo_guest_id", guestId);
+      }
+
+      if (!guestId) {
+        guestId = Math.floor(Math.random() * 100000000).toString();
+        localStorage.setItem("demo_guest_id", guestId);
+      }
+      console.log("Demo auto-login bypass triggered outside Telegram client");
+      const demoPayload = {
+        id: Number(guestId),
+        username: "guest_user",
+        first_name: "እንግዳ (Guest)",
+        photo_url: `https://api.dicebear.com/7.x/bottts/svg?seed=${guestId}`,
+      };
+      bootstrapUser(demoPayload);
     } catch (e) {
       console.warn("Silent WebApp load check warning:", e);
     }
   }, []);
-
-  const handleTelegramLogin = () => {
-    setLoginWarning(null);
-    const tg = (window as any).Telegram?.WebApp;
-    
-    if (tg) {
-      try {
-        tg.ready();
-        tg.expand();
-      } catch (e) {
-        console.warn("Could not expand Telegram frame:", e);
-      }
-    }
-
-    const tgUser = tg?.initDataUnsafe?.user;
-    if (tgUser && tgUser.id) {
-      console.log("Real Telegram Web App User found on button click:", tgUser);
-      const tgPayload = {
-        id: tgUser.id,
-        username: tgUser.username || `user_${tgUser.id}`,
-        first_name: tgUser.first_name || tgUser.username || "እንግዳ (Guest)",
-        photo_url: tgUser.photo_url || `https://api.dicebear.com/7.x/bottts/svg?seed=${tgUser.id}`,
-      };
-      bootstrapUser(tgPayload);
-    } else {
-      console.warn("User data not found in Telegram WebApp context.");
-      setLoginWarning("የቴሌግራም መረጃ ማግኘት አልተቻለም! እባክዎ ቴሌግራምን አፕዴት ያድርጉ።");
-    }
-  };
-
-  // Safe developer demo login function to bypass the block inside browser preview environments
-  const handleDemoModeLogin = () => {
-    setLoginWarning(null);
-    console.log("Demo user login bypass triggered for testing outside Telegram client");
-    const demoPayload = {
-      id: 12345678,
-      username: "demo_user",
-      first_name: "እንግዳ (Demo User)",
-      photo_url: "https://api.dicebear.com/7.x/bottts/svg?seed=demo123",
-    };
-    bootstrapUser(demoPayload);
-  };
 
   const syncUserSubscription = async () => {
     if (!currentUser) return;
@@ -169,78 +150,18 @@ export default function App() {
     }
   }, [showAdminTab, activeTab]);
 
-  // If loading user backend data
-  if (loadingUser) {
+  // If loading user backend data or auto-logging in sequence
+  if (loadingUser || !currentUser) {
     return (
       <div className="min-h-screen bg-cosmic-bg text-gray-100 flex flex-col items-center justify-center space-y-4 font-sans text-center relative">
-        <div className="aurora-gold -top-20 -left-20 opacity-30"></div>
-        <div className="aurora-purple top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-20"></div>
-        <div className="relative z-10 flex flex-col items-center gap-3">
-          <Compass className="w-12 h-12 text-amber-500 animate-spin" />
-          <p className="text-xs text-gray-400 font-sans">አካውንት መረጃዎችን እያመሳሰልን ነው...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // 1. If not logged in & no current user loaded, render the "Login with Telegram" Welcome layout!
-  if (!currentUser) {
-    return (
-      <div className="min-h-screen bg-cosmic-bg text-gray-100 flex flex-col justify-between p-6 relative overflow-hidden font-sans">
         <div className="aurora-gold -top-20 -left-20 opacity-30 animate-pulse"></div>
         <div className="aurora-purple top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-20"></div>
-
-        <div className="flex-1 flex flex-col justify-center items-center max-w-md w-full mx-auto space-y-8 z-10 animate-fadeIn text-center py-10">
-          <div className="inline-flex p-5 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20 shadow-xl shadow-amber-500/5 animate-pulse">
-            <Moon className="w-12 h-12" />
+        <div className="relative z-10 flex flex-col items-center gap-4">
+          <div className="inline-flex p-4 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20 shadow-xl shadow-amber-500/5 mb-2 animate-pulse">
+            <Moon className="w-10 h-10" />
           </div>
-
-          <div className="space-y-3 font-sans">
-            <h1 className="text-4xl font-extrabold tracking-tight text-white font-display bg-clip-text text-transparent bg-gradient-to-r from-amber-400 via-yellow-200 to-white">
-              Helm / ህልም
-            </h1>
-            <p className="text-xs text-amber-500 font-bold uppercase tracking-wider">
-              የህልም መፍቻ (AI Dream Interpreter)
-            </p>
-            <p className="text-xs text-gray-300 leading-relaxed max-w-sm mx-auto">
-              የታየውን ህልም በአማርኛ በመጻፍ መንፈሳዊ፣ ስነ-ልቦናዊ እና ምልክታዊ የሆኑ ጥልቅ ትርጓሜዎችን በጥበብ ከተሞላው የዮሴፍ አርቲፊሻል ኢንተለጀንስ ያግኙ።
-            </p>
-          </div>
-
-          <div className="w-full space-y-4">
-            <button
-              id="login-telegram-btn"
-              onClick={handleTelegramLogin}
-              className="w-full bg-gradient-to-r from-amber-400 to-amber-600 hover:from-amber-500 hover:to-amber-700 text-black font-extrabold py-4 px-8 rounded-2xl text-xs tracking-wider uppercase shadow-lg shadow-amber-500/15 cursor-pointer transform active:scale-95 transition-all text-center flex items-center justify-center gap-2"
-            >
-              <Moon className="w-4 h-4 fill-black text-black" />
-              በቴሌግራም ይግቡ (Login with Telegram)
-            </button>
-
-            {loginWarning && (
-              <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-xl text-center select-none animate-fadeIn max-w-sm mx-auto space-y-2">
-                <p className="text-xs text-amber-400 font-bold leading-relaxed">
-                  ⚠️ {loginWarning}
-                </p>
-                <div className="text-[10px] text-gray-400 leading-relaxed">
-                  Please open this application inside your official Telegram client to proceed.
-                </div>
-                <div className="pt-2 border-t border-amber-500/10">
-                  <button
-                    onClick={handleDemoModeLogin}
-                    className="text-[11px] text-amber-500 hover:text-amber-400 underline font-semibold cursor-pointer"
-                  >
-                    ለሙከራ ያህል በድር አሳሽ ግባ (Bypass and Try Demo Mode)
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Footer copyright */}
-        <div className="text-[10px] text-gray-500 z-10 text-center font-mono">
-          © {new Date().getFullYear()} XML Labs. Tailored Spiritual Guidance for Ethiopian Users inside Telegram.
+          <Compass className="w-8 h-8 text-amber-500 animate-spin" />
+          <p className="text-xs text-gray-400 font-sans tracking-wide">ወደ ህልም መፍቻ እየገባን ነው...</p>
         </div>
       </div>
     );
