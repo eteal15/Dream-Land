@@ -63,51 +63,76 @@ export default function App() {
 
   // Perform automatic silent login check on mount if Telegram sdk is ready and available
   React.useEffect(() => {
-    try {
-      const tg = (window as any).Telegram?.WebApp;
-      if (tg) {
-        tg.ready();
-        tg.expand();
+    let attempts = 0;
+    const maxAttempts = 15; // Wait up to 1.5 seconds
+
+    const checkAndInitTelegram = () => {
+      try {
+        const tg = (window as any).Telegram?.WebApp;
+        if (tg) {
+          tg.ready();
+          try {
+            tg.expand();
+          } catch (e) {}
+          
+          const tgUser = tg?.initDataUnsafe?.user;
+          if (tgUser && tgUser.id) {
+            console.log("Real Telegram Web App User auto-detected:", tgUser);
+            const tgPayload = {
+              id: tgUser.id,
+              username: tgUser.username || `user_${tgUser.id}`,
+              first_name: tgUser.first_name || tgUser.username || "እንግዳ (Guest)",
+              photo_url: tgUser.photo_url || `https://api.dicebear.com/7.x/bottts/svg?seed=${tgUser.id}`,
+            };
+            bootstrapUser(tgPayload);
+            return true;
+          }
+        }
+      } catch (e) {
+        console.warn("Silent WebApp load check warning:", e);
+      }
+      return false;
+    };
+
+    if (checkAndInitTelegram()) {
+      return;
+    }
+
+    const timer = setInterval(() => {
+      attempts++;
+      const success = checkAndInitTelegram();
+      
+      if (success || attempts >= maxAttempts) {
+        clearInterval(timer);
         
-        const tgUser = tg?.initDataUnsafe?.user;
-        if (tgUser && tgUser.id) {
-          console.log("Real Telegram Web App User auto-detected on mount:", tgUser);
-          const tgPayload = {
-            id: tgUser.id,
-            username: tgUser.username || `user_${tgUser.id}`,
-            first_name: tgUser.first_name || tgUser.username || "እንግዳ (Guest)",
-            photo_url: tgUser.photo_url || `https://api.dicebear.com/7.x/bottts/svg?seed=${tgUser.id}`,
+        if (!success) {
+          // If we fall through, there's no Telegram user (e.g. running outside Telegram).
+          // Automatically bypass login as a guest to allow preview, but DO NOT grant admin access to everyone.
+          let guestId = localStorage.getItem("demo_guest_id");
+          
+          const urlParams = new URLSearchParams(window.location.search);
+          if (urlParams.get("admin") === "true") {
+            guestId = import.meta.env.VITE_ADMIN_TELEGRAM_ID || "733830209";
+            localStorage.setItem("demo_guest_id", guestId);
+          }
+
+          if (!guestId) {
+            guestId = Math.floor(Math.random() * 100000000).toString();
+            localStorage.setItem("demo_guest_id", guestId);
+          }
+          console.log("Demo auto-login bypass triggered outside Telegram client");
+          const demoPayload = {
+            id: Number(guestId),
+            username: "guest_user",
+            first_name: "እንግዳ (Guest)",
+            photo_url: `https://api.dicebear.com/7.x/bottts/svg?seed=${guestId}`,
           };
-          bootstrapUser(tgPayload);
-          return;
+          bootstrapUser(demoPayload);
         }
       }
+    }, 100);
 
-      // If we fall through, there's no Telegram user (e.g. running outside Telegram).
-      // Automatically bypass login as a guest to allow preview, but DO NOT grant admin access to everyone.
-      let guestId = localStorage.getItem("demo_guest_id");
-      
-      const urlParams = new URLSearchParams(window.location.search);
-      if (urlParams.get("admin") === "true") {
-        guestId = import.meta.env.VITE_ADMIN_TELEGRAM_ID || "733830209";
-        localStorage.setItem("demo_guest_id", guestId);
-      }
-
-      if (!guestId) {
-        guestId = Math.floor(Math.random() * 100000000).toString();
-        localStorage.setItem("demo_guest_id", guestId);
-      }
-      console.log("Demo auto-login bypass triggered outside Telegram client");
-      const demoPayload = {
-        id: Number(guestId),
-        username: "guest_user",
-        first_name: "እንግዳ (Guest)",
-        photo_url: `https://api.dicebear.com/7.x/bottts/svg?seed=${guestId}`,
-      };
-      bootstrapUser(demoPayload);
-    } catch (e) {
-      console.warn("Silent WebApp load check warning:", e);
-    }
+    return () => clearInterval(timer);
   }, []);
 
   const syncUserSubscription = async () => {
