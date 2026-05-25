@@ -112,8 +112,21 @@ export default function App() {
       bootstrapUser(tgPayload);
     } else {
       console.warn("User data not found in Telegram WebApp context.");
-      setLoginWarning("እባክዎን ይህንን አፕሊኬሽን በቴሌግራም ውስጥ ይክፈቱ!");
+      setLoginWarning("የቴሌግራም መረጃ ማግኘት አልተቻለም! እባክዎ ቴሌግራምን አፕዴት ያድርጉ።");
     }
+  };
+
+  // Safe developer demo login function to bypass the block inside browser preview environments
+  const handleDemoModeLogin = () => {
+    setLoginWarning(null);
+    console.log("Demo user login bypass triggered for testing outside Telegram client");
+    const demoPayload = {
+      id: 12345678,
+      username: "demo_user",
+      first_name: "እንግዳ (Demo User)",
+      photo_url: "https://api.dicebear.com/7.x/bottts/svg?seed=demo123",
+    };
+    bootstrapUser(demoPayload);
   };
 
   const syncUserSubscription = async () => {
@@ -205,12 +218,20 @@ export default function App() {
             </button>
 
             {loginWarning && (
-              <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-xl text-center select-none animate-fadeIn max-w-sm mx-auto">
+              <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-xl text-center select-none animate-fadeIn max-w-sm mx-auto space-y-2">
                 <p className="text-xs text-amber-400 font-bold leading-relaxed">
                   ⚠️ {loginWarning}
                 </p>
-                <div className="text-[10px] text-gray-400 mt-1 leading-relaxed">
+                <div className="text-[10px] text-gray-400 leading-relaxed">
                   Please open this application inside your official Telegram client to proceed.
+                </div>
+                <div className="pt-2 border-t border-amber-500/10">
+                  <button
+                    onClick={handleDemoModeLogin}
+                    className="text-[11px] text-amber-500 hover:text-amber-400 underline font-semibold cursor-pointer"
+                  >
+                    ለሙከራ ያህል በድር አሳሽ ግባ (Bypass and Try Demo Mode)
+                  </button>
                 </div>
               </div>
             )}
