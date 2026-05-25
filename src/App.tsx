@@ -12,6 +12,7 @@ export default function App() {
   const [dreams, setDreams] = React.useState<Dream[]>([]);
   const [activeTab, setActiveTab] = React.useState<"interpret" | "history" | "payment" | "admin">("interpret");
   const [loadingUser, setLoadingUser] = React.useState(false);
+  const [initError, setInitError] = React.useState<boolean>(false);
 
   // Initialize with real user and loading history cache per user ID
   const bootstrapUser = async (userPayload: {
@@ -62,14 +63,15 @@ export default function App() {
   };
 
   // Perform automatic silent login check on mount if Telegram sdk is ready and available
-  React.useEffect(() => {
+  const startInitSequence = React.useCallback(() => {
+    setInitError(false);
     let attempts = 0;
-    const maxAttempts = 15; // Wait up to 1.5 seconds
+    const maxAttempts = 50; // Wait up to 5 seconds (50 * 100ms)
 
     const checkAndInitTelegram = () => {
       try {
         const tg = (window as any).Telegram?.WebApp;
-        if (tg) {
+        if (tg && tg.initData) {
           tg.ready();
           try {
             tg.expand();
@@ -102,12 +104,17 @@ export default function App() {
       attempts++;
       const success = checkAndInitTelegram();
       
-      if (success || attempts >= maxAttempts) {
+      if (success) {
+        clearInterval(timer);
+      } else if (attempts >= maxAttempts) {
         clearInterval(timer);
         
-        if (!success) {
-          // If we fall through, there's no Telegram user (e.g. running outside Telegram).
-          // Automatically bypass login as a guest to allow preview, but DO NOT grant admin access to everyone.
+        // If we fall through, there's no Telegram user (e.g. running outside Telegram).
+        // Check if we are outside telegram (normal browser)
+        const inIframe = window.self !== window.top;
+        const tgActive = !!(window as any).Telegram?.WebApp?.initData;
+        
+        if (!tgActive && (window.location.hostname === "localhost" || !inIframe || window.location.href.includes("ais-") || window.location.href.includes("vercel.app"))) {
           let guestId = localStorage.getItem("demo_guest_id");
           
           const urlParams = new URLSearchParams(window.location.search);
@@ -128,12 +135,19 @@ export default function App() {
             photo_url: `https://api.dicebear.com/7.x/bottts/svg?seed=${guestId}`,
           };
           bootstrapUser(demoPayload);
+        } else {
+          // Timeout occurred and likely inside telegram but init failed
+          setInitError(true);
         }
       }
     }, 100);
 
     return () => clearInterval(timer);
   }, []);
+
+  React.useEffect(() => {
+    return startInitSequence();
+  }, [startInitSequence]);
 
   const syncUserSubscription = async () => {
     if (!currentUser) return;
@@ -176,17 +190,47 @@ export default function App() {
   }, [showAdminTab, activeTab]);
 
   // If loading user backend data or auto-logging in sequence
-  if (loadingUser || !currentUser) {
+  if (loadingUser || (!currentUser && !initError)) {
     return (
       <div className="min-h-screen bg-cosmic-bg text-gray-100 flex flex-col items-center justify-center space-y-4 font-sans text-center relative">
         <div className="aurora-gold -top-20 -left-20 opacity-30 animate-pulse"></div>
         <div className="aurora-purple top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-20"></div>
-        <div className="relative z-10 flex flex-col items-center gap-4">
+        <div className="relative z-10 flex flex-col items-center gap-4 animate-fadeIn">
           <div className="inline-flex p-4 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20 shadow-xl shadow-amber-500/5 mb-2 animate-pulse">
             <Moon className="w-10 h-10" />
           </div>
           <Compass className="w-8 h-8 text-amber-500 animate-spin" />
           <p className="text-xs text-gray-400 font-sans tracking-wide">ወደ ህልም መፍቻ እየገባን ነው...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Handle Timeout / Init Failure in Telegram
+  if (initError && !currentUser) {
+    return (
+      <div className="min-h-screen bg-cosmic-bg text-gray-100 flex flex-col items-center justify-center space-y-4 font-sans text-center relative p-6">
+        <div className="aurora-gold -top-20 -left-20 opacity-30"></div>
+        <div className="aurora-purple top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-20"></div>
+        <div className="relative z-10 flex flex-col items-center gap-6 animate-fadeIn max-w-sm">
+          <div className="inline-flex p-4 rounded-full bg-red-500/10 text-red-500 border border-red-500/20 shadow-xl shadow-red-500/5 mb-2">
+            <Moon className="w-10 h-10" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-white mb-2">ግንኙነት አልተሳካም</h2>
+            <p className="text-sm text-red-400 font-sans leading-relaxed">
+              የቴሌግራም መረጃ መጫን አልቻለም። እባክዎ ቦቱን እንደገና ያስጀምሩት።
+            </p>
+            <p className="text-[10px] text-gray-500 mt-2 font-mono">
+              (Could not load Telegram data. Please restart the bot.)
+            </p>
+          </div>
+          <button
+            onClick={startInitSequence}
+            className="w-full bg-gradient-to-r from-amber-400 to-amber-600 hover:from-amber-500 hover:to-amber-700 text-black font-extrabold py-3 px-8 rounded-xl text-xs tracking-wider shadow-lg shadow-amber-500/15 cursor-pointer transform active:scale-95 transition-all text-center"
+          >
+            እንደገና ሞክር (Try Again)
+          </button>
         </div>
       </div>
     );
